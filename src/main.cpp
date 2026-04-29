@@ -1,4 +1,3 @@
-
 #include <SDL2/SDL.h>
 #include <cmath>
 #include <algorithm>
@@ -263,7 +262,9 @@ void update() {
     }
 
     if (mouseHeldDown) {
+        Vector2<int> pos;
         currentDot = Vector2<int>((mousePos.x - BOARD_START.x) / SPACING, (mousePos.y - BOARD_START.y) / SPACING);
+        pos = currentDot;
         currentDot = gridToWorldSpace(currentDot);
         Vector2<int> lastDot = *ee.path.rbegin();
         if (lastDot.x == currentDot.x || lastDot.y == currentDot.y) {
@@ -286,20 +287,43 @@ void update() {
 
         const int DEADZONE = 10;
 
+        Vector2<int> check;
         if (std::abs(dy) > std::abs(dx)) {
-            if (dy > DEADZONE)
+            if (dy > DEADZONE) {
                 test = "down";
-            else if (dy < -DEADZONE)
+                check = {check.x, check.y-1};
+                if (std::ranges::find(ee.path, check) != ee.path.end()) {
+                    ee.path.push_back(check);
+                }
+            }
+            else if (dy < -DEADZONE) {
                 test = "up";
-            else
+                check = {check.x, check.y+1};
+                if (std::ranges::find(ee.path, check) != ee.path.end()) {
+                    ee.path.push_back(check);
+                }
+            }
+            else {
                 test = "";
+            }
         } else {
-            if (dx > DEADZONE)
+            if (dx > DEADZONE) {
                 test = "right";
-            else if (dx < -DEADZONE)
+                check = {check.x-1, check.y};
+                if (std::ranges::find(ee.path, check) != ee.path.end()) {
+                    ee.path.push_back(check);
+                }
+            }
+            else if (dx < -DEADZONE) {
                 test = "left";
-            else
+                check = {check.x+1, check.y};
+                if (std::ranges::find(ee.path, check) != ee.path.end()) {
+                    ee.path.push_back(check);
+                }
+            }
+            else {
                 test = "";
+            }
         }
     }
 
