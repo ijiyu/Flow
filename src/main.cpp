@@ -1,3 +1,4 @@
+
 #include <SDL2/SDL.h>
 #include <cmath>
 #include <algorithm>
@@ -6,8 +7,8 @@
 #include <vector>
 #include <map>
 
-constexpr int SCREEN_WIDTH = 1200;
-constexpr int SCREEN_HEIGHT = 1200;
+constexpr int SCREEN_WIDTH = 800;
+constexpr int SCREEN_HEIGHT = 800;
 constexpr int FPS = 120;
 constexpr int frameDelay = 1000 / FPS;
 constexpr float GRAVITY = 1500.0f;
@@ -158,11 +159,12 @@ bool mouseHeldDown = false;
 
 const int BOARD_COLUMNS = 5;
 const int BOARD_ROWS = 5;
-const int SPACING = 200;
+const int SPACING = 100;
 const int BOARD_WIDTH = BOARD_COLUMNS * SPACING;
 const int BOARD_HEIGHT = BOARD_ROWS * SPACING;
 const int DOT_RADIUS = 40;
-Vector2 BOARD_START{10, 20};
+Vector2 BOARD_START{100, 100};
+
 std::vector<std::vector<std::string>> board = 
     {{"R", " ", "G", " ", "Y"},
     {" ", " ", "B", " ", "O"},
@@ -181,7 +183,7 @@ std::map<std::string, color> colorMap = {
 
 Vector2<int> currentDot;
 Edge ee;
-bool test = false;
+std::string test = "";
 
 Vector2<int> gridToWorldSpace(Vector2<int> vec) {
     return {BOARD_START.x + vec.x * SPACING + SPACING/2, BOARD_START.y + vec.y * SPACING + SPACING/2};
@@ -272,20 +274,32 @@ void update() {
                         break;
                 }
             }
-            if (currentDot != lastDot) {
+            if (currentDot != lastDot && ((currentDot.y > lastDot.y && mousePos.y >= currentDot.y) || 
+                        (currentDot.y < lastDot.y && mousePos.y <= currentDot.y) ||
+                        (currentDot.x > lastDot.x && mousePos.x >= currentDot.x) ||
+                        (currentDot.x < lastDot.x && mousePos.x <= currentDot.x))) {
                 ee.path.push_back(currentDot);
             }
         }
-        int down = mousePos.y - currentDot.y;
-        int up = currentDot.y - mousePos.y;
-        int right = mousePos.x - currentDot.x;
-        int left = currentDot.x - mousePos.x;
-        if (down > up && down > right && down > left) {
-            std::cout << down << std::endl;
-            test = true;
-        }
-        else {
-            test = false;
+        int dx = mousePos.x - lastDot.x;
+        int dy = mousePos.y - lastDot.y;
+
+        const int DEADZONE = 5;
+
+        if (std::abs(dy) > std::abs(dx)) {
+            if (dy > DEADZONE)
+                test = "down";
+            else if (dy < -DEADZONE)
+                test = "up";
+            else
+                test = "";
+        } else {
+            if (dx > DEADZONE)
+                test = "right";
+            else if (dx < -DEADZONE)
+                test = "left";
+            else
+                test = "";
         }
     }
 
@@ -297,11 +311,23 @@ void update() {
     drawGrid();
     drawBoard();
     ee.display();
-    if (test) {
-        Line l(currentDot.x, currentDot.y, currentDot.x, mousePos.y, color(255, 255, 255, 255));
-        l.display();
-    }
+    if (mouseHeldDown && !ee.path.empty()) {
+        Vector2<int> lastDot = *ee.path.rbegin();
+        int dx = mousePos.x - lastDot.x;
+        int dy = mousePos.y - lastDot.y;
 
+        if (std::abs(dy) > std::abs(dx)) {
+            Line l(lastDot.x, lastDot.y,
+                    lastDot.x, mousePos.y,
+                    color(255,255,255,255));
+            l.display();
+        } else {
+            Line l(lastDot.x, lastDot.y,
+                    mousePos.x, lastDot.y,
+                    color(255,255,255,255));
+            l.display();
+        }
+    }
     SDL_RenderPresent(renderer);
 }
 
