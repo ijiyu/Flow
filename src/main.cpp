@@ -284,7 +284,7 @@ void update() {
         int dx = mousePos.x - lastDot.x;
         int dy = mousePos.y - lastDot.y;
 
-        const int DEADZONE = 5;
+        const int DEADZONE = 10;
 
         if (std::abs(dy) > std::abs(dx)) {
             if (dy > DEADZONE)
