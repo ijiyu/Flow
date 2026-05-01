@@ -35,7 +35,10 @@ const int SPACING = 100;
 const int BOARD_WIDTH = BOARD_COLUMNS * SPACING;
 const int BOARD_HEIGHT = BOARD_ROWS * SPACING;
 const int DOT_RADIUS = 40;
-Vector2 BOARD_START{100, 100};
+const Vector2<int> BOARD_START{100, 100};
+const Vector2<int> BOARD_END{BOARD_START.x + BOARD_COLUMNS * SPACING, BOARD_START.y + BOARD_ROWS * SPACING};
+
+std::vector<std::string> colors = {"R", "G", "B", "Y", "O"};
 
 std::vector<std::vector<std::string>> board = 
     {{"R", " ", "G", " ", "Y"},
@@ -51,7 +54,6 @@ std::map<std::string, color> colorMap = {
     {"B", color(0, 0, 255, 255)},
     {"O", color(255, 100, 0, 255)}
 };
-
 
 Vector2<int> gridToWorldSpace(Vector2<int> vec) {
     return {BOARD_START.x + vec.x * SPACING + SPACING/2, BOARD_START.y + vec.y * SPACING + SPACING/2};
@@ -77,22 +79,23 @@ public:
 
     void lineDisplay() {
         if (lines.size() == 0) return;
+        std::cout << "A: ";
         for (int i = 0; i < lines.size()-1; i++) {
             Line l{lines[i].x, lines[i].y, lines[i+1].x, lines[i+1].y, color{255, 255, 255, 255}};
+            std::cout << "(" << lines[i].x << ", " << lines[i].y << ") ";
             l.display();
         }
+        std::cout << "(" << lines.back().x << ", " << lines.back().y << ") ";
+        std::cout << std::endl;
     }
 
     void blockDisplay() {
         if (path.size() == 0)
             return;
-        std::cout << "A: ";
         for (int i = 0; i < path.size(); i++) {
             Rect r{path[i].x-SPACING/2, path[i].y-SPACING/2, SPACING, SPACING, color{100, 0, 0, 10}};
-            std::cout << "(" << path[i].x << ", " << path[i].y << ") ";
             r.display();
         }
-        std::cout << std::endl;
     }
 
     void ghostLineDisplay() {
@@ -110,7 +113,7 @@ public:
 
     }
 
-    void removeDuplicates(std::vector<Vector2<int>> &vec, std::unordered_set &uset, Vector2<int> currentPos) {
+    void removeDuplicates(std::vector<Vector2<int>> &vec, std::unordered_set<Vector2<int>> &uset, Vector2<int> currentPos) {
         if (uset.contains(currentPos)) {
             while (vec.back() != currentPos && !vec.empty()) {
                 Vector2<int> popped = vec.back();
@@ -120,14 +123,12 @@ public:
         }
     }
 
-    void updatePositions() {
+    void updatePositions(Vector2<int> currentPos) {
         if (lines.empty())
             return;
 
-        Vector2<int> currentPos {(mousePos.x - BOARD_START.x) / SPACING, (mousePos.y - BOARD_START.y) / SPACING};
         Vector2<int> lastDot = lines.back();
         Vector2<int> lastBlock = path.back();
-        currentPos = gridToWorldSpace(currentPos);
 
         removeDuplicates(lines, linesSet, currentPos);
         removeDuplicates(path, pathSet, currentPos);
@@ -137,15 +138,16 @@ public:
             pathSet.insert(currentPos);
             Vector2<int> candidate = path[path.size()-2];
             if (lines.empty() || lines.back() != candidate) {
-                lines.push_back(currentPos);
-                linesSet.insert(currentPos);
+                std::cout << "hi" << std::endl;
+                lines.push_back(candidate);
+                linesSet.insert(candidate);
             }
         }
         if (lastDot.x == currentPos.x || lastDot.y == currentPos.y) {
-            bool down = currentPos.y > lastDot.y && mousePos.y >= currentPos.y);
-            bool up = currentPos.y < lastDot.y && mousePos.y <= currentPos.y);
-            bool left = currentPos.x < lastDot.x && mousePos.x <= currentPos.x);
-            bool right = currentPos.x > lastDot.x && mousePos.x >= currentPos.x);
+            bool down = currentPos.y > lastDot.y && mousePos.y >= currentPos.y;
+            bool up = currentPos.y < lastDot.y && mousePos.y <= currentPos.y;
+            bool left = currentPos.x < lastDot.x && mousePos.x <= currentPos.x;
+            bool right = currentPos.x > lastDot.x && mousePos.x >= currentPos.x;
             bool sided = up || down || left || right;
             if (currentPos != lastDot && sided) {
                 lines.push_back(currentPos);
@@ -154,15 +156,22 @@ public:
         }
     }
 
+    void addEnd(Vector2<int> endPos) {
+        if (lines.back() != endPos)
+            lines.push_back(endPos);
+    }
+
     void initialize(Vector2<int> currentPos) {
         path = {currentPos};
         lines = {currentPos};
+        pathSet.clear();
+        linesSet.clear();
         pathSet.insert(currentPos);
         linesSet.insert(currentPos);
     }
 };
 
-Edge ee;
+std::vector<Edge> edges;
 
 void drawGrid() {
     constexpr int spacing = 100;
@@ -199,6 +208,12 @@ void drawBoard() {
     }
 }
 
+Vector2<int> getCurrentPos() {
+    Vector2<int> currentPos = Vector2<int>((mousePos.x - BOARD_START.x) / SPACING, (mousePos.y - BOARD_START.y) / SPACING);
+    currentPos = gridToWorldSpace(currentPos);
+    return currentPos;
+}
+
 
 void start() {
     SDL_Init(SDL_INIT_VIDEO);
@@ -222,18 +237,17 @@ void handleInput() {
         if (event.type == SDL_MOUSEBUTTONDOWN) {
             if (event.button.button == SDL_BUTTON_LEFT) {
                 mouseHeldDown = true;
-                if (mousePos.x < BOARD_START.x || mousePos.y < BOARD_START.y || mousePos.x > BOARD_START.x + BOARD_COLUMNS * SPACING || mousePos.y > BOARD_START.y + BOARD_ROWS * SPACING)
-                    std::cout << "out of bounds\n" << std::flush;
-                else {
-                    Vector2<int> currentPos = Vector2<int>((mousePos.x - BOARD_START.x) / SPACING, (mousePos.y - BOARD_START.y) / SPACING);
-                    currentPos = gridToWorldSpace(currentPos);
-                    ee.initialize(currentPos);
+                if (mousePos.x >= BOARD_START.x && mousePos.y >= BOARD_START.y && mousePos.x <= BOARD_END.x && mousePos.y <= BOARD_END.y) {
+                    Edge edge;
+                    edge.initialize(getCurrentPos());
+                    edges.push_back(edge);
                 }
             }
         }
         else if (event.type == SDL_MOUSEBUTTONUP) {
             if (event.button.button == SDL_BUTTON_LEFT) {
                 mouseHeldDown = false;
+                edges.back().addEnd(getCurrentPos());
             }
         }
     }
@@ -246,17 +260,18 @@ void handleInput() {
 void update() {
     handleInput();
 
-    if (mouseHeldDown) {
-        ee.updatePositions();
-    }
+    if (mouseHeldDown)
+        edges.back().updatePositions(getCurrentPos());
 
+    for (Edge& edge : edges)
+        edge.blockDisplay();
 
-    ee.blockDisplay();
     drawGrid();
     drawBoard();
-    ee.lineDisplay();
+    for (Edge& edge : edges)
+        edge.lineDisplay();
     if (mouseHeldDown) {
-        ee.ghostLineDisplay();
+        edges.back().ghostLineDisplay();
     }
     SDL_RenderPresent(renderer);
 }
