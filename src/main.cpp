@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <unordered_set>
 
 #include "color.h"
 #include "Vector2.h"
@@ -71,42 +72,97 @@ public:
 
 class Edge {
 public:
-    std::vector<Vector2<int>> path;
-    std::vector<Vector2<int>> lines;
+    std::vector<Vector2<int>> path, lines;
+    std::unordered_set<Vector2<int>> pathSet, linesSet;
+
     void lineDisplay() {
-        std::cout << "B: ";
         if (lines.size() == 0) return;
-        if (path.size() > 1) {
-            Vector2<int> candidate = path[path.size()-2];
-            if (lines.empty() || lines.back() != candidate) {
-                lines.push_back(candidate);
-            }
-        }
         for (int i = 0; i < lines.size()-1; i++) {
             Line l{lines[i].x, lines[i].y, lines[i+1].x, lines[i+1].y, color{255, 255, 255, 255}};
             l.display();
-            std::cout << '(' << lines[i].x << ' ' << lines[i].y << ')' << ' ';
         }
-        std::cout << std::endl;
     }
 
     void blockDisplay() {
         if (path.size() == 0)
             return;
-        //std::cout << "A: ";
+        std::cout << "A: ";
         for (int i = 0; i < path.size(); i++) {
             Rect r{path[i].x-SPACING/2, path[i].y-SPACING/2, SPACING, SPACING, color{100, 0, 0, 10}};
+            std::cout << "(" << path[i].x << ", " << path[i].y << ") ";
             r.display();
-            //std::cout << '(' << path[i].x << ' ' << path[i].y << ')' << ' ';
         }
-        //std::cout << std::endl;
+        std::cout << std::endl;
+    }
+
+    void ghostLineDisplay() {
+        if (lines.empty())
+            return;
+        Vector2<int> lastDot = lines.back();
+        Vector2<int> diff{mousePos.x - lastDot.x, mousePos.y - lastDot.y};
+        if (std::abs(diff.y) > std::abs(diff.x)) {
+            Line l(lastDot.x, lastDot.y, lastDot.x, mousePos.y, color(255,255,255,255));
+            l.display();
+        } else {
+            Line l(lastDot.x, lastDot.y, mousePos.x, lastDot.y, color(255,255,255,255));
+            l.display();
+        }
+
+    }
+
+    void removeDuplicates(std::vector<Vector2<int>> &vec, std::unordered_set &uset, Vector2<int> currentPos) {
+        if (uset.contains(currentPos)) {
+            while (vec.back() != currentPos && !vec.empty()) {
+                Vector2<int> popped = vec.back();
+                vec.pop_back();
+                uset.erase(popped);
+            }
+        }
+    }
+
+    void updatePositions() {
+        if (lines.empty())
+            return;
+
+        Vector2<int> currentPos {(mousePos.x - BOARD_START.x) / SPACING, (mousePos.y - BOARD_START.y) / SPACING};
+        Vector2<int> lastDot = lines.back();
+        Vector2<int> lastBlock = path.back();
+        currentPos = gridToWorldSpace(currentPos);
+
+        removeDuplicates(lines, linesSet, currentPos);
+        removeDuplicates(path, pathSet, currentPos);
+
+        if (currentPos != lastBlock) {
+            path.push_back(currentPos);
+            pathSet.insert(currentPos);
+            Vector2<int> candidate = path[path.size()-2];
+            if (lines.empty() || lines.back() != candidate) {
+                lines.push_back(currentPos);
+                linesSet.insert(currentPos);
+            }
+        }
+        if (lastDot.x == currentPos.x || lastDot.y == currentPos.y) {
+            bool down = currentPos.y > lastDot.y && mousePos.y >= currentPos.y);
+            bool up = currentPos.y < lastDot.y && mousePos.y <= currentPos.y);
+            bool left = currentPos.x < lastDot.x && mousePos.x <= currentPos.x);
+            bool right = currentPos.x > lastDot.x && mousePos.x >= currentPos.x);
+            bool sided = up || down || left || right;
+            if (currentPos != lastDot && sided) {
+                lines.push_back(currentPos);
+                linesSet.insert(currentPos);
+            }
+        }
+    }
+
+    void initialize(Vector2<int> currentPos) {
+        path = {currentPos};
+        lines = {currentPos};
+        pathSet.insert(currentPos);
+        linesSet.insert(currentPos);
     }
 };
 
-
-Vector2<int> currentDot;
 Edge ee;
-std::string test = "";
 
 void drawGrid() {
     constexpr int spacing = 100;
@@ -143,6 +199,7 @@ void drawBoard() {
     }
 }
 
+
 void start() {
     SDL_Init(SDL_INIT_VIDEO);
     SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, 0, &window, &renderer);
@@ -152,7 +209,7 @@ void start() {
     }
 }
 
-void update() {
+void handleInput() {
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
             running = false;
@@ -168,12 +225,9 @@ void update() {
                 if (mousePos.x < BOARD_START.x || mousePos.y < BOARD_START.y || mousePos.x > BOARD_START.x + BOARD_COLUMNS * SPACING || mousePos.y > BOARD_START.y + BOARD_ROWS * SPACING)
                     std::cout << "out of bounds\n" << std::flush;
                 else {
-                    std::cout << "NEW" << std::endl;
-                    currentDot = Vector2<int>((mousePos.x - BOARD_START.x) / SPACING, (mousePos.y - BOARD_START.y) / SPACING);
-                    ee.path = {};
-                    ee.path.push_back(gridToWorldSpace(currentDot));
-                    ee.lines = {};
-                    ee.lines.push_back(gridToWorldSpace(currentDot));
+                    Vector2<int> currentPos = Vector2<int>((mousePos.x - BOARD_START.x) / SPACING, (mousePos.y - BOARD_START.y) / SPACING);
+                    currentPos = gridToWorldSpace(currentPos);
+                    ee.initialize(currentPos);
                 }
             }
         }
@@ -183,109 +237,26 @@ void update() {
             }
         }
     }
-
-    if (mouseHeldDown && !ee.lines.empty()) {
-        Vector2<int> pos;
-        currentDot = Vector2<int>((mousePos.x - BOARD_START.x) / SPACING, (mousePos.y - BOARD_START.y) / SPACING);
-        pos = currentDot;
-        currentDot = gridToWorldSpace(currentDot);
-        Vector2<int> lastDot = *ee.lines.rbegin();
-        Vector2<int> lastBlock = *ee.path.rbegin();
-        if (currentDot != lastBlock) {
-            ee.path.push_back(currentDot);
-        }
-        if (lastDot.x == currentDot.x || lastDot.y == currentDot.y) {
-            if (std::ranges::find(ee.lines, currentDot) != ee.lines.end()) {
-                while (*ee.lines.rbegin() != currentDot) {
-                    ee.lines.pop_back();
-                    if (ee.lines.empty())
-                        break;
-                }
-            }
-            if (std::ranges::find(ee.path, currentDot) != ee.path.end()) {
-                while (*ee.path.rbegin() != currentDot) {
-                    ee.path.pop_back();
-                    if (ee.path.empty())
-                        break;
-                }
-            }
-            if (currentDot != lastDot && ((currentDot.y > lastDot.y && mousePos.y >= currentDot.y) || 
-                        (currentDot.y < lastDot.y && mousePos.y <= currentDot.y) ||
-                        (currentDot.x > lastDot.x && mousePos.x >= currentDot.x) ||
-                        (currentDot.x < lastDot.x && mousePos.x <= currentDot.x))) {
-                ee.lines.push_back(currentDot);
-            }
-        }
-        int dx = mousePos.x - lastDot.x;
-        int dy = mousePos.y - lastDot.y;
-
-        const int DEADZONE = 10;
-
-        Vector2<int> check;
-        if (std::abs(dy) > std::abs(dx)) {
-            if (dy > DEADZONE) {
-                test = "down";
-                check = {check.x, check.y-1};
-                if (std::ranges::find(ee.lines, check) != ee.lines.end()) {
-                    ee.lines.push_back(check);
-                }
-            }
-            else if (dy < -DEADZONE) {
-                test = "up";
-                check = {check.x, check.y+1};
-                if (std::ranges::find(ee.lines, check) != ee.lines.end()) {
-                    ee.lines.push_back(check);
-                }
-            }
-            else {
-                test = "";
-            }
-        } else {
-            if (dx > DEADZONE) {
-                test = "right";
-                check = {check.x-1, check.y};
-                if (std::ranges::find(ee.lines, check) != ee.lines.end()) {
-                    ee.lines.push_back(check);
-                }
-            }
-            else if (dx < -DEADZONE) {
-                test = "left";
-                check = {check.x+1, check.y};
-                if (std::ranges::find(ee.lines, check) != ee.lines.end()) {
-                    ee.lines.push_back(check);
-                }
-            }
-            else {
-                test = "";
-            }
-        }
-    }
-
     SDL_GetMouseState(&mousePos.x, &mousePos.y);
 
     SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
     SDL_RenderClear(renderer);
+}
+
+void update() {
+    handleInput();
+
+    if (mouseHeldDown) {
+        ee.updatePositions();
+    }
+
 
     ee.blockDisplay();
     drawGrid();
     drawBoard();
     ee.lineDisplay();
-    if (mouseHeldDown && !ee.lines.empty()) {
-        Vector2<int> lastDot = *ee.lines.rbegin();
-        int dx = mousePos.x - lastDot.x;
-        int dy = mousePos.y - lastDot.y;
-
-        if (std::abs(dy) > std::abs(dx)) {
-            Line l(lastDot.x, lastDot.y,
-                    lastDot.x, mousePos.y,
-                    color(255,0,255,255));
-            l.display();
-        } else {
-            Line l(lastDot.x, lastDot.y,
-                    mousePos.x, lastDot.y,
-                    color(255,0,255,255));
-            l.display();
-        }
+    if (mouseHeldDown) {
+        ee.ghostLineDisplay();
     }
     SDL_RenderPresent(renderer);
 }

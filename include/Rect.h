@@ -6,11 +6,11 @@
 
 class Rect {
 public:
-    float x, y, w, h;
+    int x, y, w, h;
     color c{};
 
-    Rect(const float x, const float y, const float w, const float h, const color c);
-    Rect(const float x, const float y, const float w, const float h);
+    Rect(const int x, const int y, const int w, const int h, const color c);
+    Rect(const int x, const int y, const int w, const int h);
     void display() const;
 };
 
